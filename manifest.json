@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Facebook Reels Remover",
+  "version": "1.1",
+  "description": "Hides the Reels section from your Facebook feed.",
+  "permissions": ["storage"],
+  "action": {
+    "default_title": "Facebook Reels Remover",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://www.facebook.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
