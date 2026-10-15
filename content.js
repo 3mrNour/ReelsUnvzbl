@@ -1,30 +1,95 @@
 (() => {
   "use strict";
+
+  const REEL_LINK = 'a[href*="/reel/"], a[href*="/reels/"]';
+  const MAX_PARENT = 10;
+  const MIN_REEL_CHILDREN = 3;
   const hidden = new Set();
-  function hide() {
-    // find all elements with exact Arabic text
-    document.querySelectorAll('div,h3,span,a,button,li').forEach(el => {
-      const txt = el.textContent.trim();
-      if (txt === '????') {
-        let cur = el;
-        for (let i = 0; i < 12; i++) {
-          if (!cur) break;
-          if (cur.role === 'gridcell' || cur.role === 'tab' || cur.role === 'listitem' || cur.className.includes('x6ikm8r')) {
-            if (!hidden.has(cur)) {
-              hidden.add(cur);
-              cur.style.setProperty('display', 'none', 'important');
-              return;
-            }
+
+  function countReelLinkChildren(node) {
+    let count = 0;
+    for (const child of node.children) {
+      if (child.querySelector(REEL_LINK)) count++;
+    }
+    return count;
+  }
+
+  function findReelsRail(link) {
+    let node = link.parentElement;
+    for (let steps = 0; node && steps < MAX_PARENT; node = node.parentElement, steps++) {
+      if (countReelLinkChildren(node) >= MIN_REEL_CHILDREN) return node;
+    }
+    return null;
+  }
+
+  function hideReelsLabel() {
+    const labels = document.querySelectorAll(
+      '[aria-label="ريلز"], [aria-label="Reels"]'
+    );
+    labels.forEach((label) => {
+      let node = label;
+      for (let steps = 0; node && steps < MAX_PARENT; node = node.parentElement, steps++) {
+        if (node.classList && node.classList.contains("x6ikm8r")) {
+          if (!hidden.has(node)) {
+            hidden.add(node);
+            node.style.display = "none";
           }
-          cur = cur.parentElement;
-        }
-        if (!hidden.has(el.parentElement)) {
-          hidden.add(el.parentElement);
-          el.parentElement.style.setProperty('display', 'none', 'important');
+          return;
         }
       }
     });
   }
-  hide();
-  new MutationObserver(hide).observe(document.body, { childList: true, subtree: true });
+
+  function processNode(root) {
+    if (root.querySelectorAll) {
+      const links = root.querySelectorAll(REEL_LINK);
+      links.forEach((link) => {
+        const rail = findReelsRail(link);
+        if (!rail || hidden.has(rail)) return;
+        if (!rail.closest('div[role="feed"]')) return;
+        hidden.add(rail);
+        rail.style.display = "none";
+      });
+    }
+    if (root.querySelectorAll) {
+      hideReelsLabel();
+    }
+  }
+
+  function enable() {
+    processNode(document);
+    if (!observer) {
+      observer = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          for (const node of m.addedNodes) {
+            if (node.nodeType === 1) processNode(node);
+          }
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+  }
+
+  function disable() {
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+    hidden.forEach((node) => {
+      node.style.display = "";
+    });
+    hidden.clear();
+  }
+
+  let observer = null;
+
+  chrome.storage.sync.get({ enabled: true }, ({ enabled }) => {
+    if (enabled) enable();
+  });
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "sync" || !changes.enabled) return;
+    if (changes.enabled.newValue) enable();
+    else disable();
+  });
 })();
